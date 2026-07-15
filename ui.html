@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Stroke Array</title>
+    <style>
+      :root { color: #1e1e1e; font: 12px/1.4 Inter, Arial, sans-serif; }
+      body { margin: 0; }
+      main { display: grid; gap: 16px; padding: 16px; }
+      h1 { margin: 0; font-size: 16px; }
+      h2 { margin: 0 0 8px; color: #6b6b6b; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+      .stack { display: grid; gap: 8px; }
+      .capture { display: grid; grid-template-columns: 1fr minmax(0, 1fr); gap: 8px; align-items: center; }
+      button { min-height: 32px; border: 0; border-radius: 4px; background: #0d99ff; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+      button:hover { background: #007be5; }
+      button:focus-visible, input:focus-visible { outline: 2px solid #0d99ff; outline-offset: 2px; }
+      output { overflow: hidden; color: #6b6b6b; text-overflow: ellipsis; white-space: nowrap; }
+      fieldset { display: flex; gap: 12px; margin: 0; padding: 0; border: 0; }
+      label { display: flex; gap: 6px; align-items: center; }
+      #value-row { display: grid; grid-template-columns: 1fr 116px; gap: 8px; align-items: center; }
+      input[type="number"] { box-sizing: border-box; width: 100%; min-height: 32px; padding: 0 8px; border: 1px solid #d0d0d0; border-radius: 4px; font: inherit; }
+      #notice { min-height: 17px; margin: -4px 0 0; color: #6b6b6b; }
+      #notice[data-level="error"] { color: #c4382f; }
+      #notice[data-level="success"] { color: #14804a; }
+      #create { width: 100%; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Stroke Array</h1>
+      <section aria-labelledby="layers-heading">
+        <h2 id="layers-heading">Layers</h2>
+        <div class="stack">
+          <div class="capture"><button type="button" data-capture="source">Use selection as source</button><output id="source-name">Not set</output></div>
+          <div class="capture"><button type="button" data-capture="path">Use selection as path</button><output id="path-name">Not set</output></div>
+        </div>
+      </section>
+      <section aria-labelledby="array-heading">
+        <h2 id="array-heading">Array</h2>
+        <div class="stack">
+          <fieldset>
+            <label><input type="radio" name="mode" value="count" checked> Count</label>
+            <label><input type="radio" name="mode" value="spacing"> Spacing</label>
+          </fieldset>
+          <label id="value-row"><span id="value-label">Copies</span><input id="value" type="number" min="1" step="1" value="8"></label>
+          <label><input id="endpoints" type="checkbox" checked> Include endpoints</label>
+        </div>
+      </section>
+      <section aria-labelledby="orientation-heading">
+        <h2 id="orientation-heading">Orientation</h2>
+        <fieldset>
+          <label><input type="radio" name="orientation" value="follow" checked> Follow path</label>
+          <label><input type="radio" name="orientation" value="original"> Keep original</label>
+        </fieldset>
+      </section>
+      <p id="notice" role="status"></p>
+      <button id="create" type="button">Create array</button>
+    </main>
+    <script>
+      const form = { mode: "count", orientation: "follow" };
+      const post = (type, payload = {}) => parent.postMessage({ pluginMessage: { type, ...payload } }, "*");
+      const value = document.querySelector("#value");
+      const valueLabel = document.querySelector("#value-label");
+      const notice = document.querySelector("#notice");
+
+      function updateMode(mode) {
+        form.mode = mode;
+        valueLabel.textContent = mode === "count" ? "Copies" : "Spacing";
+        value.step = mode === "count" ? "1" : "0.5";
+        value.min = mode === "count" ? "1" : "0.5";
+        value.value = mode === "count" ? "8" : "24";
+      }
+
+      function render(message) {
+        if (!message) return;
+        if (message.type === "state") {
+          document.querySelector("#source-name").textContent = message.state.sourceName || "Not set";
+          document.querySelector("#path-name").textContent = message.state.pathName || "Not set";
+        }
+        if (message.type === "notice") {
+          notice.textContent = message.text;
+          notice.dataset.level = message.level;
+        }
+        if (message.type === "complete") {
+          notice.textContent = `Created ${message.count} copies.`;
+          notice.dataset.level = "success";
+        }
+      }
+
+      document.querySelectorAll("[data-capture]").forEach((button) => {
+        button.addEventListener("click", () => post(`capture-${button.dataset.capture}`));
+      });
+      document.querySelectorAll("input[name=mode]").forEach((input) => {
+        input.addEventListener("change", () => updateMode(input.value));
+      });
+      document.querySelectorAll("input[name=orientation]").forEach((input) => {
+        input.addEventListener("change", () => { form.orientation = input.value; });
+      });
+      document.querySelector("#create").addEventListener("click", () => {
+        post("create-array", {
+          options: {
+            mode: form.mode,
+            value: Number(value.value),
+            includeEndpoints: document.querySelector("#endpoints").checked,
+            orientation: form.orientation,
+          },
+        });
+      });
+      window.onmessage = (event) => render(event.data.pluginMessage);
+    </script>
+  </body>
+</html>
