@@ -22,3 +22,7 @@ The source and path must live in the same parent layer. The plugin leaves both u
 - Paths must be a single continuous `VECTOR` path. Branched or disconnected networks are rejected.
 - `Follow path` adds the local path direction to the source's existing rotation. `Keep original` preserves it.
 - In Spacing mode, enabling endpoints adds the path end even when it does not fall exactly on the requested spacing interval.
+
+## Position An Existing Array
+
+Select one generated `Stroke Array` group, then use the Position X and Y fields to move it by an exact pixel offset from its original generated location. Click `Apply offset` to position it, or `Reset offset` to return it to that saved base location. Applying the same values never compounds movement.
