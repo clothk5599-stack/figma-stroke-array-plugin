@@ -5,10 +5,12 @@
     <title>Stroke Array</title>
     <style>
       :root { color: #1e1e1e; font: 12px/1.4 Inter, Arial, sans-serif; }
-      body { margin: 0; }
-      main { display: grid; gap: 16px; padding: 16px; }
+      body { height: 100vh; margin: 0; overflow: hidden; }
+      main { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; }
+      .content { display: grid; gap: 16px; overflow-y: auto; padding: 16px; }
+      .footer { display: grid; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid #e5e5e5; background: #fff; }
       h1 { margin: 0; font-size: 16px; }
-      h2 { margin: 0 0 8px; color: #6b6b6b; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+      h2 { margin: 0 0 8px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #6b6b6b; }
       .stack { display: grid; gap: 8px; }
       .capture { display: grid; grid-template-columns: 1fr minmax(0, 1fr); gap: 8px; align-items: center; }
       button { min-height: 32px; border: 0; border-radius: 4px; background: #0d99ff; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
@@ -19,68 +21,76 @@
       label { display: flex; gap: 6px; align-items: center; }
       #value-row { display: grid; grid-template-columns: 1fr 116px; gap: 8px; align-items: center; }
       input[type="number"] { box-sizing: border-box; width: 100%; min-height: 32px; padding: 0 8px; border: 1px solid #d0d0d0; border-radius: 4px; font: inherit; }
-      #notice { min-height: 17px; margin: -4px 0 0; color: #6b6b6b; }
+      #notice { min-height: 17px; margin: 0; color: #6b6b6b; }
       #notice[data-level="error"] { color: #c4382f; }
       #notice[data-level="success"] { color: #14804a; }
-      .position-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       button.secondary { background: #e5e5e5; color: #1e1e1e; }
       button.secondary:hover { background: #d5d5d5; }
       button:disabled { cursor: not-allowed; opacity: 0.45; }
+      .help { margin: 0 0 8px; color: #6b6b6b; }
+      #select-handle { width: 100%; }
       #create { width: 100%; }
     </style>
   </head>
   <body>
     <main>
-      <h1>Stroke Array</h1>
-      <section aria-labelledby="layers-heading">
-        <h2 id="layers-heading">Layers</h2>
-        <div class="stack">
-          <div class="capture"><button type="button" data-capture="source">Use selection as source</button><output id="source-name">Not set</output></div>
-          <div class="capture"><button type="button" data-capture="path">Use selection as path</button><output id="path-name">Not set</output></div>
-        </div>
-      </section>
-      <section aria-labelledby="array-heading">
-        <h2 id="array-heading">Array</h2>
-        <div class="stack">
-          <fieldset>
-            <label><input type="radio" name="mode" value="count" checked> Count</label>
-            <label><input type="radio" name="mode" value="spacing"> Spacing</label>
-          </fieldset>
-          <label id="value-row"><span id="value-label">Copies</span><input id="value" type="number" min="1" step="1" value="8"></label>
-          <label><input id="endpoints" type="checkbox" checked> Include endpoints</label>
-        </div>
-      </section>
-      <section aria-labelledby="position-heading">
-        <h2 id="position-heading">Position</h2>
-        <div class="stack">
-          <label id="value-row"><span>X</span><input id="offset-x" type="number" step="1" value="0" disabled></label>
-          <label id="value-row"><span>Y</span><input id="offset-y" type="number" step="1" value="0" disabled></label>
-          <div class="position-actions">
-            <button id="apply-offset" type="button" disabled>Apply offset</button>
-            <button id="reset-offset" class="secondary" type="button" disabled>Reset offset</button>
+      <div class="content">
+        <h1>Stroke Array</h1>
+
+        <section aria-labelledby="layers-heading">
+          <h2 id="layers-heading">Layers</h2>
+          <div class="stack">
+            <div class="capture">
+              <button type="button" data-capture="source">Use selection as source</button>
+              <output id="source-name">Not set</output>
+            </div>
+            <div class="capture">
+              <button type="button" data-capture="path">Use selection as path</button>
+              <output id="path-name">Not set</output>
+            </div>
           </div>
-        </div>
-      </section>
-      <section aria-labelledby="orientation-heading">
-        <h2 id="orientation-heading">Orientation</h2>
-        <fieldset>
-          <label><input type="radio" name="orientation" value="follow" checked> Follow path</label>
-          <label><input type="radio" name="orientation" value="original"> Keep original</label>
-        </fieldset>
-      </section>
-      <p id="notice" role="status"></p>
-      <button id="create" type="button">Create array</button>
+        </section>
+
+        <section aria-labelledby="array-heading">
+          <h2 id="array-heading">Array</h2>
+          <div class="stack">
+            <fieldset>
+              <label><input type="radio" name="mode" value="count" checked> Count</label>
+              <label><input type="radio" name="mode" value="spacing"> Spacing</label>
+            </fieldset>
+            <label id="value-row"><span id="value-label">Copies</span><input id="value" type="number" min="1" step="1" value="8"></label>
+            <label><input id="endpoints" type="checkbox" checked> Include endpoints</label>
+          </div>
+        </section>
+
+        <section aria-labelledby="handle-heading">
+          <h2 id="handle-heading">Start handle</h2>
+          <p class="help">Drag the persistent handle on the canvas to move the array start along its path.</p>
+          <button id="select-handle" class="secondary" type="button" disabled>Select handle</button>
+        </section>
+
+        <section aria-labelledby="orientation-heading">
+          <h2 id="orientation-heading">Orientation</h2>
+          <fieldset>
+            <label><input type="radio" name="orientation" value="follow" checked> Follow path</label>
+            <label><input type="radio" name="orientation" value="original"> Keep original</label>
+          </fieldset>
+        </section>
+      </div>
+
+      <div class="footer">
+        <p id="notice" role="status"></p>
+        <button id="create" type="button">Create array</button>
+      </div>
     </main>
+
     <script>
       const form = { mode: "count", orientation: "follow" };
       const post = (type, payload = {}) => parent.postMessage({ pluginMessage: { type, ...payload } }, "*");
       const value = document.querySelector("#value");
       const valueLabel = document.querySelector("#value-label");
       const notice = document.querySelector("#notice");
-      const offsetX = document.querySelector("#offset-x");
-      const offsetY = document.querySelector("#offset-y");
-      const applyOffset = document.querySelector("#apply-offset");
-      const resetOffset = document.querySelector("#reset-offset");
+      const selectHandle = document.querySelector("#select-handle");
 
       function updateMode(mode) {
         form.mode = mode;
@@ -96,10 +106,8 @@
           document.querySelector("#source-name").textContent = message.state.sourceName || "Not set";
           document.querySelector("#path-name").textContent = message.state.pathName || "Not set";
         }
-        if (message.type === "offset-state") {
-          [offsetX, offsetY, applyOffset, resetOffset].forEach((control) => { control.disabled = !message.enabled; });
-          offsetX.value = message.x;
-          offsetY.value = message.y;
+        if (message.type === "handle-state") {
+          selectHandle.disabled = !message.enabled;
           if (!message.enabled && message.message) {
             notice.textContent = message.message;
             notice.dataset.level = "";
@@ -124,10 +132,7 @@
       document.querySelectorAll("input[name=orientation]").forEach((input) => {
         input.addEventListener("change", () => { form.orientation = input.value; });
       });
-      applyOffset.addEventListener("click", () => {
-        post("apply-offset", { x: Number(offsetX.value), y: Number(offsetY.value) });
-      });
-      resetOffset.addEventListener("click", () => post("reset-offset"));
+      selectHandle.addEventListener("click", () => post("select-handle"));
       document.querySelector("#create").addEventListener("click", () => {
         post("create-array", {
           options: {
@@ -139,7 +144,7 @@
         });
       });
       window.onmessage = (event) => render(event.data.pluginMessage);
-      post("get-offset-state");
+      post("get-handle-state");
     </script>
   </body>
 </html>

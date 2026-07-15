@@ -1,6 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { distancesForOptions, offsetPosition, pointAtDistance, sampleVectorNetwork } = require("./code.js");
+const {
+  distancesForOptions,
+  nearestPointOnPath,
+  pointAtDistance,
+  sampleVectorNetwork,
+  shiftDistances,
+} = require("./code.js");
 
 test("count mode distributes endpoints evenly", () => {
   assert.deepEqual(
@@ -42,7 +48,23 @@ test("rejects a branched vector network", () => {
   );
 });
 
-test("offsetPosition always uses the saved base", () => {
-  assert.deepEqual(offsetPosition(100, 200, 40, -20), { x: 140, y: 180 });
-  assert.deepEqual(offsetPosition(100, 200, 40, -20), { x: 140, y: 180 });
+test("shiftDistances wraps at the end of the path", () => {
+  assert.deepEqual(shiftDistances([0, 25, 50, 75], 75, 100), [75, 0, 25, 50]);
+});
+
+test("shiftDistances preserves the original open-path endpoint at zero offset", () => {
+  assert.deepEqual(shiftDistances([0, 50, 100], 0, 100), [0, 50, 100]);
+});
+
+test("shifted distances are deterministic across repeated updates", () => {
+  const first = shiftDistances([0, 50, 100], 25, 100);
+  const second = shiftDistances([0, 50, 100], 25, 100);
+  assert.deepEqual(first, second);
+});
+
+test("nearestPointOnPath returns the closest point and cumulative distance", () => {
+  assert.deepEqual(
+    nearestPointOnPath([{ x: 0, y: 0 }, { x: 100, y: 0 }], { x: 30, y: 20 }),
+    { x: 30, y: 0, distance: 30, squaredDistance: 400 },
+  );
 });
