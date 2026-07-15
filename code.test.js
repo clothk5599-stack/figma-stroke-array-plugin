@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  bottomEdgeRotationTowardPoint,
   distancesForOptions,
   nearestPointOnPath,
   pointAtDistance,
@@ -75,4 +76,15 @@ test("topLeftForCenteredRotation preserves the requested visual center", () => {
   assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 90), { x: 90, y: 110 });
   assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 180), { x: 110, y: 110 });
   assert.deepEqual(topLeftForCenteredRotation(100, 100, 40, 20, 90), { x: 90, y: 120 });
+});
+
+test("bottomEdgeRotationTowardPoint faces the center in every cardinal direction", () => {
+  assert.equal(bottomEdgeRotationTowardPoint({ x: 0, y: 0 }, { x: 0, y: 10 }, 12), 0);
+  assert.equal(bottomEdgeRotationTowardPoint({ x: 0, y: 0 }, { x: 10, y: 0 }, 12), 90);
+  assert.equal(bottomEdgeRotationTowardPoint({ x: 0, y: 0 }, { x: 0, y: -10 }, 12), 180);
+  assert.equal(bottomEdgeRotationTowardPoint({ x: 0, y: 0 }, { x: -10, y: 0 }, 12), -90);
+});
+
+test("bottomEdgeRotationTowardPoint uses fallback at the center", () => {
+  assert.equal(bottomEdgeRotationTowardPoint({ x: 2, y: 2 }, { x: 2, y: 2 }, 12), 12);
 });

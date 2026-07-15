@@ -10,13 +10,15 @@ const PLUGIN_DATA = {
   sourceId: "stroke-array-source-id",
   pathId: "stroke-array-path-id",
   handleId: "stroke-array-handle-id",
+  centerHandleId: "stroke-array-center-handle-id",
   settings: "stroke-array-settings",
   startDistance: "stroke-array-start-distance",
   handle: "stroke-array-start-handle",
+  centerHandle: "stroke-array-center-handle",
   groupId: "stroke-array-group-id",
 };
 
-const ignoredHandlePositions = new Map();
+const ignoredHandleUpdates = new Map();
 
 function distancesForOptions(length, options) {
   const { mode, value, includeEndpoints } = options;
@@ -137,12 +139,29 @@ function topLeftForCenteredRotation(centerX, centerY, width, height, rotation) {
   };
 }
 
+function normalizeRotation(rotation) {
+  const normalized = ((rotation + 180) % 360 + 360) % 360 - 180;
+  return normalized === -180 ? 180 : normalized;
+}
+
+function bottomEdgeRotationTowardPoint(copyPoint, centerPoint, fallbackRotation) {
+  const dx = centerPoint.x - copyPoint.x;
+  const dy = centerPoint.y - copyPoint.y;
+  if (Math.abs(dx) < 0.0001 && Math.abs(dy) < 0.0001) return fallbackRotation;
+  const direction = Math.atan2(dy, dx) * 180 / Math.PI;
+  return normalizeRotation(90 - direction);
+}
+
 function isStrokeArrayGroup(node) {
   return node && node.type === "GROUP" && node.getPluginData(PLUGIN_DATA.result) === "true";
 }
 
 function isStartHandle(node) {
   return node && node.type === "ELLIPSE" && node.getPluginData(PLUGIN_DATA.handle) === "true";
+}
+
+function isCenterHandle(node) {
+  return node && node.type === "ELLIPSE" && node.getPluginData(PLUGIN_DATA.centerHandle) === "true";
 }
 
 function orderedSegments(vectorNetwork) {
@@ -243,10 +262,11 @@ function captureSelection(kind) {
 }
 
 function resolveArrayData(group) {
-  if (!isStrokeArrayGroup(group)) throw new Error("Select a current Stroke Array group or start handle.");
+  if (!isStrokeArrayGroup(group)) throw new Error("Select a current Stroke Array group or linked handle.");
   const source = figma.getNodeById(group.getPluginData(PLUGIN_DATA.sourceId));
   const path = figma.getNodeById(group.getPluginData(PLUGIN_DATA.pathId));
-  const handle = figma.getNodeById(group.getPluginData(PLUGIN_DATA.handleId));
+  const startHandle = figma.getNodeById(group.getPluginData(PLUGIN_DATA.handleId));
+  const centerHandle = figma.getNodeById(group.getPluginData(PLUGIN_DATA.centerHandleId));
   let settings;
   try {
     settings = JSON.parse(group.getPluginData(PLUGIN_DATA.settings));
@@ -255,23 +275,36 @@ function resolveArrayData(group) {
   }
   if (!source) throw new Error("The source layer for this array was deleted.");
   if (!path || path.type !== "VECTOR") throw new Error("The vector path for this array was deleted.");
-  if (!handle || !isStartHandle(handle)) throw new Error("The start handle for this array was deleted.");
-  if (source.parent !== path.parent || handle.parent !== path.parent) {
-    throw new Error("The source, path, and start handle must remain in the same parent layer.");
+  if (!startHandle || !isStartHandle(startHandle)) throw new Error("The start handle for this array was deleted.");
+  if (settings.orientation === "center" && (!centerHandle || !isCenterHandle(centerHandle))) {
+    throw new Error("The center handle for this array was deleted.");
   }
-  return { source, path, handle, settings };
+  if (
+    source.parent !== path.parent
+    || startHandle.parent !== path.parent
+    || (centerHandle && centerHandle.parent !== path.parent)
+  ) {
+    throw new Error("The source, path, and linked handles must remain in the same parent layer.");
+  }
+  return { source, path, startHandle, centerHandle: isCenterHandle(centerHandle) ? centerHandle : null, settings };
 }
 
-function createCopies(source, path, points, distances, orientation) {
+function createCopies(source, path, points, distances, orientation, centerPoint = null) {
   return distances.map((distance) => {
     const location = pointAtDistance(points, distance);
     const copy = source.clone();
     source.parent.appendChild(copy);
-    const rotation = orientation === "follow" ? source.rotation + location.angle : source.rotation;
+    const copyPoint = { x: path.x + location.x, y: path.y + location.y };
+    let rotation = source.rotation;
+    if (orientation === "follow") rotation = source.rotation + location.angle;
+    if (orientation === "center") {
+      if (!centerPoint) throw new Error("The Face Center orientation requires a center handle.");
+      rotation = bottomEdgeRotationTowardPoint(copyPoint, centerPoint, source.rotation);
+    }
     copy.rotation = rotation;
     const position = topLeftForCenteredRotation(
-      path.x + location.x,
-      path.y + location.y,
+      copyPoint.x,
+      copyPoint.y,
       copy.width,
       copy.height,
       rotation,
@@ -282,21 +315,30 @@ function createCopies(source, path, points, distances, orientation) {
   });
 }
 
-function saveGroupData(group, source, path, handle, settings, startDistance) {
+function saveGroupData(group, source, path, startHandle, centerHandle, settings, startDistance) {
   group.setPluginData(PLUGIN_DATA.result, "true");
   group.setPluginData(PLUGIN_DATA.sourceId, source.id);
   group.setPluginData(PLUGIN_DATA.pathId, path.id);
-  group.setPluginData(PLUGIN_DATA.handleId, handle ? handle.id : "");
+  group.setPluginData(PLUGIN_DATA.handleId, startHandle ? startHandle.id : "");
+  group.setPluginData(PLUGIN_DATA.centerHandleId, centerHandle ? centerHandle.id : "");
   group.setPluginData(PLUGIN_DATA.settings, JSON.stringify(settings));
   group.setPluginData(PLUGIN_DATA.startDistance, String(startDistance));
 }
 
-function placeHandle(handle, path, location) {
+function rememberHandleState(handle) {
+  ignoredHandleUpdates.set(handle.id, {
+    x: handle.x,
+    y: handle.y,
+    groupId: handle.getPluginData(PLUGIN_DATA.groupId),
+  });
+}
+
+function placeStartHandle(handle, path, location) {
   const x = path.x + location.x - handle.width / 2;
   const y = path.y + location.y - handle.height / 2;
-  ignoredHandlePositions.set(handle.id, { x, y });
   handle.x = x;
   handle.y = y;
+  rememberHandleState(handle);
 }
 
 function createStartHandle(source, path, points) {
@@ -308,8 +350,30 @@ function createStartHandle(source, path, points) {
   handle.strokes = [{ type: "SOLID", color: { r: 0.08, g: 0.08, b: 0.08 } }];
   handle.strokeWeight = 2;
   handle.setPluginData(PLUGIN_DATA.handle, "true");
-  placeHandle(handle, path, pointAtDistance(points, 0));
+  placeStartHandle(handle, path, pointAtDistance(points, 0));
   return handle;
+}
+
+function createCenterHandle(source, path, points) {
+  const handle = figma.createEllipse();
+  path.parent.appendChild(handle);
+  handle.name = `Stroke Array Center Handle: ${source.name}`;
+  handle.resize(14, 14);
+  handle.fills = [{ type: "SOLID", color: { r: 0.35, g: 0.78, b: 1 } }];
+  handle.strokes = [{ type: "SOLID", color: { r: 0.08, g: 0.08, b: 0.08 } }];
+  handle.strokeWeight = 2;
+  handle.setPluginData(PLUGIN_DATA.centerHandle, "true");
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxY = Math.max(...points.map((point) => point.y));
+  handle.x = path.x + (minX + maxX) / 2 - handle.width / 2;
+  handle.y = path.y + (minY + maxY) / 2 - handle.height / 2;
+  return handle;
+}
+
+function handleCenter(handle) {
+  return handle ? { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 } : null;
 }
 
 function createArray(options) {
@@ -335,62 +399,85 @@ function createArray(options) {
     throw new Error("These settings do not place any copies on this path.");
   }
 
-  const copies = createCopies(source, path, points, distances, options.orientation);
+  const centerHandle = options.orientation === "center" ? createCenterHandle(source, path, points) : null;
+  const copies = createCopies(source, path, points, distances, options.orientation, handleCenter(centerHandle));
 
   const group = figma.group(copies, source.parent);
   group.name = `Stroke Array: ${source.name}`;
-  const handle = createStartHandle(source, path, points);
-  saveGroupData(group, source, path, handle, options, 0);
-  handle.setPluginData(PLUGIN_DATA.groupId, group.id);
+  const startHandle = createStartHandle(source, path, points);
+  saveGroupData(group, source, path, startHandle, centerHandle, options, 0);
+  startHandle.setPluginData(PLUGIN_DATA.groupId, group.id);
+  rememberHandleState(startHandle);
+  if (centerHandle) {
+    centerHandle.setPluginData(PLUGIN_DATA.groupId, group.id);
+    rememberHandleState(centerHandle);
+  }
   figma.currentPage.selection = [group];
-  figma.viewport.scrollAndZoomIntoView([group, handle]);
+  figma.viewport.scrollAndZoomIntoView([group, startHandle, ...(centerHandle ? [centerHandle] : [])]);
   sendHandleState();
   return copies.length;
 }
 
 function selectedArray() {
   const selected = figma.currentPage.selection;
-  if (selected.length !== 1) return { group: null, handle: null };
+  if (selected.length !== 1) return { group: null, startHandle: null, centerHandle: null };
   const node = selected[0];
   if (isStrokeArrayGroup(node)) {
-    const handle = figma.getNodeById(node.getPluginData(PLUGIN_DATA.handleId));
-    return { group: node, handle: isStartHandle(handle) ? handle : null };
+    const startHandle = figma.getNodeById(node.getPluginData(PLUGIN_DATA.handleId));
+    const centerHandle = figma.getNodeById(node.getPluginData(PLUGIN_DATA.centerHandleId));
+    return {
+      group: node,
+      startHandle: isStartHandle(startHandle) ? startHandle : null,
+      centerHandle: isCenterHandle(centerHandle) ? centerHandle : null,
+    };
   }
-  if (isStartHandle(node)) {
+  if (isStartHandle(node) || isCenterHandle(node)) {
     const group = figma.getNodeById(node.getPluginData(PLUGIN_DATA.groupId));
-    return { group: isStrokeArrayGroup(group) ? group : null, handle: node };
+    if (!isStrokeArrayGroup(group)) return { group: null, startHandle: null, centerHandle: null };
+    const startHandle = figma.getNodeById(group.getPluginData(PLUGIN_DATA.handleId));
+    const centerHandle = figma.getNodeById(group.getPluginData(PLUGIN_DATA.centerHandleId));
+    return {
+      group,
+      startHandle: isStartHandle(startHandle) ? startHandle : null,
+      centerHandle: isCenterHandle(centerHandle) ? centerHandle : null,
+    };
   }
-  return { group: null, handle: null };
+  return { group: null, startHandle: null, centerHandle: null };
 }
 
 function sendHandleState() {
-  const { group, handle } = selectedArray();
-  if (!group || !handle) {
+  const { group, startHandle, centerHandle } = selectedArray();
+  if (!group || !startHandle) {
     figma.ui.postMessage({
       type: "handle-state",
-      enabled: false,
-      message: "Create an array or select a current array group or start handle.",
+      startEnabled: false,
+      centerEnabled: false,
+      message: "Create an array or select a current array group or linked handle.",
     });
     return;
   }
-  figma.ui.postMessage({ type: "handle-state", enabled: true, handleName: handle.name });
+  figma.ui.postMessage({
+    type: "handle-state",
+    startEnabled: true,
+    centerEnabled: Boolean(centerHandle),
+  });
 }
 
-function selectHandle() {
-  const { handle } = selectedArray();
-  if (!handle) throw new Error("Select a current Stroke Array group or start handle.");
+function selectHandle(kind) {
+  const { startHandle, centerHandle } = selectedArray();
+  const handle = kind === "center" ? centerHandle : startHandle;
+  if (!handle) throw new Error(`This array does not have a ${kind} handle.`);
   figma.currentPage.selection = [handle];
   figma.viewport.scrollAndZoomIntoView([handle]);
 }
 
-function regenerateArray(group, handleOverride = null) {
-  const { source, path, handle, settings } = resolveArrayData(group);
-  const activeHandle = handleOverride || handle;
+function regenerateArray(group) {
+  const { source, path, startHandle, centerHandle, settings } = resolveArrayData(group);
   const points = sampleVectorNetwork(path.vectorNetwork);
   const length = pathLength(points);
   const target = {
-    x: activeHandle.x + activeHandle.width / 2 - path.x,
-    y: activeHandle.y + activeHandle.height / 2 - path.y,
+    x: startHandle.x + startHandle.width / 2 - path.x,
+    y: startHandle.y + startHandle.height / 2 - path.y,
   };
   const nearest = nearestPointOnPath(points, target);
   const startDistance = normalizeDistance(nearest.distance, length);
@@ -399,24 +486,32 @@ function regenerateArray(group, handleOverride = null) {
   const parent = source.parent;
   const wasGroupSelected = figma.currentPage.selection.length === 1 && figma.currentPage.selection[0].id === group.id;
   group.remove();
-  const copies = createCopies(source, path, points, shifted, settings.orientation);
+  const copies = createCopies(source, path, points, shifted, settings.orientation, handleCenter(centerHandle));
   const replacement = figma.group(copies, parent);
   replacement.name = `Stroke Array: ${source.name}`;
-  saveGroupData(replacement, source, path, activeHandle, settings, startDistance);
-  activeHandle.setPluginData(PLUGIN_DATA.groupId, replacement.id);
-  placeHandle(activeHandle, path, nearest);
+  saveGroupData(replacement, source, path, startHandle, centerHandle, settings, startDistance);
+  startHandle.setPluginData(PLUGIN_DATA.groupId, replacement.id);
+  placeStartHandle(startHandle, path, nearest);
+  if (centerHandle) {
+    centerHandle.setPluginData(PLUGIN_DATA.groupId, replacement.id);
+    rememberHandleState(centerHandle);
+  }
   if (wasGroupSelected) figma.currentPage.selection = [replacement];
   sendHandleState();
   return copies.length;
 }
 
 function synchronizeSelectedArray() {
-  const { group, handle } = selectedArray();
-  if (!group || !handle) {
+  const { group, startHandle } = selectedArray();
+  if (!group || !startHandle) {
     sendHandleState();
     return;
   }
-  regenerateArray(group, handle);
+  try {
+    regenerateArray(group);
+  } catch (error) {
+    notify("error", error instanceof Error ? error.message : "Unable to synchronize the array.");
+  }
 }
 
 function handleDocumentChange(event) {
@@ -427,19 +522,24 @@ function handleDocumentChange(event) {
   );
   for (const id of handleIds) {
     const node = figma.getNodeById(id);
-    if (!isStartHandle(node)) continue;
-    const ignored = ignoredHandlePositions.get(id);
-    if (ignored && Math.abs(node.x - ignored.x) < 0.0001 && Math.abs(node.y - ignored.y) < 0.0001) {
-      ignoredHandlePositions.delete(id);
+    if (!isStartHandle(node) && !isCenterHandle(node)) continue;
+    const ignored = ignoredHandleUpdates.get(id);
+    if (
+      ignored
+      && Math.abs(node.x - ignored.x) < 0.0001
+      && Math.abs(node.y - ignored.y) < 0.0001
+      && node.getPluginData(PLUGIN_DATA.groupId) === ignored.groupId
+    ) {
+      ignoredHandleUpdates.delete(id);
       continue;
     }
     const group = figma.getNodeById(node.getPluginData(PLUGIN_DATA.groupId));
     if (!isStrokeArrayGroup(group)) {
-      notify("error", "The array linked to this start handle was deleted.");
+      notify("error", "The array linked to this handle was deleted.");
       continue;
     }
     try {
-      regenerateArray(group, node);
+      regenerateArray(group);
     } catch (error) {
       notify("error", error instanceof Error ? error.message : "Unable to update the array.");
     }
@@ -465,8 +565,10 @@ if (typeof figma !== "undefined") {
         notify("success", `Created ${count} copies.`);
       } else if (message.type === "get-handle-state") {
         sendHandleState();
-      } else if (message.type === "select-handle") {
-        selectHandle();
+      } else if (message.type === "select-start-handle") {
+        selectHandle("start");
+      } else if (message.type === "select-center-handle") {
+        selectHandle("center");
       }
     } catch (error) {
       notify("error", error instanceof Error ? error.message : "Unable to create the array.");
@@ -476,11 +578,14 @@ if (typeof figma !== "undefined") {
 
 if (typeof module !== "undefined") {
   module.exports = {
+    bottomEdgeRotationTowardPoint,
     distancesForOptions,
     isStrokeArrayGroup,
     isStartHandle,
+    isCenterHandle,
     nearestPointOnPath,
     normalizeDistance,
+    normalizeRotation,
     orderedSegments,
     pathLength,
     pointAtDistance,

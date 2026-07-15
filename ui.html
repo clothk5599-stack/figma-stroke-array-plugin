@@ -28,7 +28,7 @@
       button.secondary:hover { background: #d5d5d5; }
       button:disabled { cursor: not-allowed; opacity: 0.45; }
       .help { margin: 0 0 8px; color: #6b6b6b; }
-      #select-handle { width: 100%; }
+      .handle-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       #create { width: 100%; }
     </style>
   </head>
@@ -64,9 +64,12 @@
         </section>
 
         <section aria-labelledby="handle-heading">
-          <h2 id="handle-heading">Start handle</h2>
-          <p class="help">Drag the persistent handle on the canvas to move the array start along its path.</p>
-          <button id="select-handle" class="secondary" type="button" disabled>Select handle</button>
+          <h2 id="handle-heading">Handles</h2>
+          <p class="help">Drag the start handle along the path. Face Center arrays also have a draggable orientation center.</p>
+          <div class="handle-actions">
+            <button id="select-start-handle" class="secondary" type="button" disabled>Select start</button>
+            <button id="select-center-handle" class="secondary" type="button" disabled>Select center</button>
+          </div>
         </section>
 
         <section aria-labelledby="orientation-heading">
@@ -74,6 +77,7 @@
           <fieldset>
             <label><input type="radio" name="orientation" value="follow" checked> Follow path</label>
             <label><input type="radio" name="orientation" value="original"> Keep original</label>
+            <label><input type="radio" name="orientation" value="center"> Face center</label>
           </fieldset>
         </section>
       </div>
@@ -90,7 +94,8 @@
       const value = document.querySelector("#value");
       const valueLabel = document.querySelector("#value-label");
       const notice = document.querySelector("#notice");
-      const selectHandle = document.querySelector("#select-handle");
+      const selectStartHandle = document.querySelector("#select-start-handle");
+      const selectCenterHandle = document.querySelector("#select-center-handle");
 
       function updateMode(mode) {
         form.mode = mode;
@@ -107,8 +112,9 @@
           document.querySelector("#path-name").textContent = message.state.pathName || "Not set";
         }
         if (message.type === "handle-state") {
-          selectHandle.disabled = !message.enabled;
-          if (!message.enabled && message.message) {
+          selectStartHandle.disabled = !message.startEnabled;
+          selectCenterHandle.disabled = !message.centerEnabled;
+          if (!message.startEnabled && message.message) {
             notice.textContent = message.message;
             notice.dataset.level = "";
           }
@@ -132,7 +138,8 @@
       document.querySelectorAll("input[name=orientation]").forEach((input) => {
         input.addEventListener("change", () => { form.orientation = input.value; });
       });
-      selectHandle.addEventListener("click", () => post("select-handle"));
+      selectStartHandle.addEventListener("click", () => post("select-start-handle"));
+      selectCenterHandle.addEventListener("click", () => post("select-center-handle"));
       document.querySelector("#create").addEventListener("click", () => {
         post("create-array", {
           options: {
