@@ -22,6 +22,10 @@
       #notice { min-height: 17px; margin: -4px 0 0; color: #6b6b6b; }
       #notice[data-level="error"] { color: #c4382f; }
       #notice[data-level="success"] { color: #14804a; }
+      .position-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      button.secondary { background: #e5e5e5; color: #1e1e1e; }
+      button.secondary:hover { background: #d5d5d5; }
+      button:disabled { cursor: not-allowed; opacity: 0.45; }
       #create { width: 100%; }
     </style>
   </head>
@@ -46,6 +50,17 @@
           <label><input id="endpoints" type="checkbox" checked> Include endpoints</label>
         </div>
       </section>
+      <section aria-labelledby="position-heading">
+        <h2 id="position-heading">Position</h2>
+        <div class="stack">
+          <label id="value-row"><span>X</span><input id="offset-x" type="number" step="1" value="0" disabled></label>
+          <label id="value-row"><span>Y</span><input id="offset-y" type="number" step="1" value="0" disabled></label>
+          <div class="position-actions">
+            <button id="apply-offset" type="button" disabled>Apply offset</button>
+            <button id="reset-offset" class="secondary" type="button" disabled>Reset offset</button>
+          </div>
+        </div>
+      </section>
       <section aria-labelledby="orientation-heading">
         <h2 id="orientation-heading">Orientation</h2>
         <fieldset>
@@ -62,6 +77,10 @@
       const value = document.querySelector("#value");
       const valueLabel = document.querySelector("#value-label");
       const notice = document.querySelector("#notice");
+      const offsetX = document.querySelector("#offset-x");
+      const offsetY = document.querySelector("#offset-y");
+      const applyOffset = document.querySelector("#apply-offset");
+      const resetOffset = document.querySelector("#reset-offset");
 
       function updateMode(mode) {
         form.mode = mode;
@@ -76,6 +95,15 @@
         if (message.type === "state") {
           document.querySelector("#source-name").textContent = message.state.sourceName || "Not set";
           document.querySelector("#path-name").textContent = message.state.pathName || "Not set";
+        }
+        if (message.type === "offset-state") {
+          [offsetX, offsetY, applyOffset, resetOffset].forEach((control) => { control.disabled = !message.enabled; });
+          offsetX.value = message.x;
+          offsetY.value = message.y;
+          if (!message.enabled && message.message) {
+            notice.textContent = message.message;
+            notice.dataset.level = "";
+          }
         }
         if (message.type === "notice") {
           notice.textContent = message.text;
@@ -96,6 +124,10 @@
       document.querySelectorAll("input[name=orientation]").forEach((input) => {
         input.addEventListener("change", () => { form.orientation = input.value; });
       });
+      applyOffset.addEventListener("click", () => {
+        post("apply-offset", { x: Number(offsetX.value), y: Number(offsetY.value) });
+      });
+      resetOffset.addEventListener("click", () => post("reset-offset"));
       document.querySelector("#create").addEventListener("click", () => {
         post("create-array", {
           options: {
@@ -107,6 +139,7 @@
         });
       });
       window.onmessage = (event) => render(event.data.pluginMessage);
+      post("get-offset-state");
     </script>
   </body>
 </html>
