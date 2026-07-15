@@ -6,6 +6,7 @@ const {
   pointAtDistance,
   sampleVectorNetwork,
   shiftDistances,
+  topLeftForCenteredRotation,
 } = require("./code.js");
 
 test("count mode distributes endpoints evenly", () => {
@@ -67,4 +68,11 @@ test("nearestPointOnPath returns the closest point and cumulative distance", () 
     nearestPointOnPath([{ x: 0, y: 0 }, { x: 100, y: 0 }], { x: 30, y: 20 }),
     { x: 30, y: 0, distance: 30, squaredDistance: 400 },
   );
+});
+
+test("topLeftForCenteredRotation preserves the requested visual center", () => {
+  assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 0), { x: 90, y: 90 });
+  assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 90), { x: 110, y: 90 });
+  assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 180), { x: 110, y: 110 });
+  assert.deepEqual(topLeftForCenteredRotation(100, 100, 40, 20, 90), { x: 110, y: 80 });
 });

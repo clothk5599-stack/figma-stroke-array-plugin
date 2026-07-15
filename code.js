@@ -125,6 +125,18 @@ function nearestPointOnPath(points, target) {
   return best;
 }
 
+function topLeftForCenteredRotation(centerX, centerY, width, height, rotation) {
+  const radians = rotation * Math.PI / 180;
+  const cosine = Math.cos(radians);
+  const sine = Math.sin(radians);
+  const centerOffsetX = cosine * width / 2 - sine * height / 2;
+  const centerOffsetY = sine * width / 2 + cosine * height / 2;
+  return {
+    x: Number((centerX - centerOffsetX).toFixed(10)),
+    y: Number((centerY - centerOffsetY).toFixed(10)),
+  };
+}
+
 function isStrokeArrayGroup(node) {
   return node && node.type === "GROUP" && node.getPluginData(PLUGIN_DATA.result) === "true";
 }
@@ -255,9 +267,17 @@ function createCopies(source, path, points, distances, orientation) {
     const location = pointAtDistance(points, distance);
     const copy = source.clone();
     source.parent.appendChild(copy);
-    copy.x = path.x + location.x - copy.width / 2;
-    copy.y = path.y + location.y - copy.height / 2;
-    if (orientation === "follow") copy.rotation = source.rotation + location.angle;
+    const rotation = orientation === "follow" ? source.rotation + location.angle : source.rotation;
+    copy.rotation = rotation;
+    const position = topLeftForCenteredRotation(
+      path.x + location.x,
+      path.y + location.y,
+      copy.width,
+      copy.height,
+      rotation,
+    );
+    copy.x = position.x;
+    copy.y = position.y;
     return copy;
   });
 }
@@ -466,5 +486,6 @@ if (typeof module !== "undefined") {
     pointAtDistance,
     sampleVectorNetwork,
     shiftDistances,
+    topLeftForCenteredRotation,
   };
 }
