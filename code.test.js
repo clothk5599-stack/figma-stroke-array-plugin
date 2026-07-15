@@ -72,7 +72,7 @@ test("nearestPointOnPath returns the closest point and cumulative distance", () 
 
 test("topLeftForCenteredRotation preserves the requested visual center", () => {
   assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 0), { x: 90, y: 90 });
-  assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 90), { x: 110, y: 90 });
+  assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 90), { x: 90, y: 110 });
   assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 180), { x: 110, y: 110 });
-  assert.deepEqual(topLeftForCenteredRotation(100, 100, 40, 20, 90), { x: 110, y: 80 });
+  assert.deepEqual(topLeftForCenteredRotation(100, 100, 40, 20, 90), { x: 90, y: 120 });
 });

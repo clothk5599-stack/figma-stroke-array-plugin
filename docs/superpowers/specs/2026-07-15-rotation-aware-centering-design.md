@@ -10,7 +10,7 @@ The plugin currently assigns `copy.x` and `copy.y` as though the copy were unrot
 
 ## Design
 
-Add a pure `topLeftForCenteredRotation(centerX, centerY, width, height, rotation)` geometry helper. It will rotate the node's local center vector `(width / 2, height / 2)` around the transform origin and subtract that rotated vector from the requested path center.
+Add a pure `topLeftForCenteredRotation(centerX, centerY, width, height, rotation)` geometry helper. It will rotate the node's local center vector `(width / 2, height / 2)` around the transform origin using Figma's matrix convention `[[cos, sin], [-sin, cos]]`, then subtract that rotated vector from the requested path center.
 
 `createCopies` will determine the final rotation first. It will then call the helper and assign the returned X/Y coordinates. `Keep original` will use the source rotation; `Follow path` will use the source rotation plus the sampled tangent angle.
 

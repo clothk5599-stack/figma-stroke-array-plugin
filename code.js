@@ -129,8 +129,8 @@ function topLeftForCenteredRotation(centerX, centerY, width, height, rotation) {
   const radians = rotation * Math.PI / 180;
   const cosine = Math.cos(radians);
   const sine = Math.sin(radians);
-  const centerOffsetX = cosine * width / 2 - sine * height / 2;
-  const centerOffsetY = sine * width / 2 + cosine * height / 2;
+  const centerOffsetX = cosine * width / 2 + sine * height / 2;
+  const centerOffsetY = -sine * width / 2 + cosine * height / 2;
   return {
     x: Number((centerX - centerOffsetX).toFixed(10)),
     y: Number((centerY - centerOffsetY).toFixed(10)),

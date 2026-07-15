@@ -29,9 +29,9 @@
 
 ```js
 assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 0), { x: 90, y: 90 });
-assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 90), { x: 110, y: 90 });
+assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 90), { x: 90, y: 110 });
 assert.deepEqual(topLeftForCenteredRotation(100, 100, 20, 20, 180), { x: 110, y: 110 });
-assert.deepEqual(topLeftForCenteredRotation(100, 100, 40, 20, 90), { x: 110, y: 80 });
+assert.deepEqual(topLeftForCenteredRotation(100, 100, 40, 20, 90), { x: 90, y: 120 });
 ```
 
 - [ ] **Step 2: Run `node --test code.test.js`**
@@ -45,8 +45,8 @@ function topLeftForCenteredRotation(centerX, centerY, width, height, rotation) {
   const radians = rotation * Math.PI / 180;
   const cosine = Math.cos(radians);
   const sine = Math.sin(radians);
-  const centerOffsetX = cosine * width / 2 - sine * height / 2;
-  const centerOffsetY = sine * width / 2 + cosine * height / 2;
+  const centerOffsetX = cosine * width / 2 + sine * height / 2;
+  const centerOffsetY = -sine * width / 2 + cosine * height / 2;
   return { x: centerX - centerOffsetX, y: centerY - centerOffsetY };
 }
 ```
