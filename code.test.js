@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { distancesForOptions, pointAtDistance, sampleVectorNetwork } = require("./code.js");
+const { distancesForOptions, offsetPosition, pointAtDistance, sampleVectorNetwork } = require("./code.js");
 
 test("count mode distributes endpoints evenly", () => {
   assert.deepEqual(
@@ -40,4 +40,9 @@ test("rejects a branched vector network", () => {
     }),
     /branches/,
   );
+});
+
+test("offsetPosition always uses the saved base", () => {
+  assert.deepEqual(offsetPosition(100, 200, 40, -20), { x: 140, y: 180 });
+  assert.deepEqual(offsetPosition(100, 200, 40, -20), { x: 140, y: 180 });
 });
