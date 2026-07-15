@@ -1,5 +1,13 @@
 const state = { sourceId: null, sourceName: null, pathId: null, pathName: null };
 
+const OFFSET_DATA = {
+  result: "stroke-array-result",
+  baseX: "stroke-array-base-x",
+  baseY: "stroke-array-base-y",
+  offsetX: "stroke-array-offset-x",
+  offsetY: "stroke-array-offset-y",
+};
+
 function distancesForOptions(length, { mode, value, includeEndpoints }) {
   if (!Number.isFinite(length) || length <= 0) throw new Error("The path has no measurable length.");
   if (mode === "count") {
@@ -41,6 +49,29 @@ function pointAtDistance(points, distance) {
     remaining -= length;
   }
   throw new Error("The path has no measurable segments.");
+}
+
+function offsetPosition(baseX, baseY, offsetX, offsetY) {
+  return { x: baseX + offsetX, y: baseY + offsetY };
+}
+
+function parseStoredNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readOffsetData(node) {
+  const baseX = parseStoredNumber(node.getPluginData(OFFSET_DATA.baseX));
+  const baseY = parseStoredNumber(node.getPluginData(OFFSET_DATA.baseY));
+  const offsetX = parseStoredNumber(node.getPluginData(OFFSET_DATA.offsetX));
+  const offsetY = parseStoredNumber(node.getPluginData(OFFSET_DATA.offsetY));
+  return baseX === null || baseY === null || offsetX === null || offsetY === null
+    ? null
+    : { baseX, baseY, offsetX, offsetY };
+}
+
+function isStrokeArrayGroup(node) {
+  return node && node.type === "GROUP" && node.getPluginData(OFFSET_DATA.result) === "true";
 }
 
 function orderedSegments(vectorNetwork) {
@@ -144,14 +175,61 @@ function createArray(options) {
 
   const group = figma.group(copies, source.parent);
   group.name = `Stroke Array: ${source.name}`;
+  group.setPluginData(OFFSET_DATA.result, "true");
+  group.setPluginData(OFFSET_DATA.baseX, String(group.x));
+  group.setPluginData(OFFSET_DATA.baseY, String(group.y));
+  group.setPluginData(OFFSET_DATA.offsetX, "0");
+  group.setPluginData(OFFSET_DATA.offsetY, "0");
   figma.currentPage.selection = [group];
   figma.viewport.scrollAndZoomIntoView([group]);
   return copies.length;
 }
 
+function selectedStrokeArrayGroup() {
+  const selected = figma.currentPage.selection;
+  return selected.length === 1 && isStrokeArrayGroup(selected[0]) ? selected[0] : null;
+}
+
+function sendOffsetState() {
+  const group = selectedStrokeArrayGroup();
+  const data = group && readOffsetData(group);
+  if (!data) {
+    figma.ui.postMessage({
+      type: "offset-state",
+      enabled: false,
+      x: 0,
+      y: 0,
+      message: "Select one generated Stroke Array group to position it.",
+    });
+    return;
+  }
+  figma.ui.postMessage({ type: "offset-state", enabled: true, x: data.offsetX, y: data.offsetY });
+}
+
+function applyOffset(offsetX, offsetY) {
+  if (!Number.isFinite(offsetX) || !Number.isFinite(offsetY)) {
+    throw new Error("X and Y offsets must be valid numbers.");
+  }
+  const group = selectedStrokeArrayGroup();
+  const data = group && readOffsetData(group);
+  if (!group || !data) throw new Error("Select one generated Stroke Array group to position it.");
+  const position = offsetPosition(data.baseX, data.baseY, offsetX, offsetY);
+  group.x = position.x;
+  group.y = position.y;
+  group.setPluginData(OFFSET_DATA.offsetX, String(offsetX));
+  group.setPluginData(OFFSET_DATA.offsetY, String(offsetY));
+  sendOffsetState();
+}
+
+function resetOffset() {
+  applyOffset(0, 0);
+}
+
 if (typeof figma !== "undefined") {
   figma.showUI(__html__, { width: 360, height: 460, title: "Stroke Array" });
   figma.ui.postMessage({ type: "state", state });
+  sendOffsetState();
+  figma.on("selectionchange", sendOffsetState);
   figma.ui.onmessage = (message) => {
     try {
       if (message.type === "capture-source") captureSelection("source");
@@ -160,6 +238,14 @@ if (typeof figma !== "undefined") {
         const count = createArray(message.options);
         figma.ui.postMessage({ type: "complete", count });
         notify("success", `Created ${count} copies.`);
+      } else if (message.type === "get-offset-state") {
+        sendOffsetState();
+      } else if (message.type === "apply-offset") {
+        applyOffset(message.x, message.y);
+        notify("success", "Position offset applied.");
+      } else if (message.type === "reset-offset") {
+        resetOffset();
+        notify("success", "Position offset reset.");
       }
     } catch (error) {
       notify("error", error instanceof Error ? error.message : "Unable to create the array.");
@@ -168,5 +254,5 @@ if (typeof figma !== "undefined") {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { distancesForOptions, orderedSegments, pathLength, pointAtDistance, sampleVectorNetwork };
+  module.exports = { distancesForOptions, isStrokeArrayGroup, offsetPosition, orderedSegments, pathLength, pointAtDistance, readOffsetData, sampleVectorNetwork };
 }
